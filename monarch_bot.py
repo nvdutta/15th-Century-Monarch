@@ -196,8 +196,8 @@ async def on_message(message):
                 """
             ).text.replace("\n\n", "\n")
 
-            await message.channel.send(answer.text)
-            print(f"Sent response: {answer.text}")
+            await message.channel.send(answer)
+            print(f"Sent response: {answer}")
             responses_today += 1
             return
 
@@ -243,7 +243,6 @@ async def on_message(message):
         advice = ""
         advice = get_advice(chosen_advisor, trimmed_message)
 
-        ##print(facts[chosen_advisor])
         print(f"Chosen fact: {advice}\n")
         
         answer = llm.models.generate_content(
@@ -263,7 +262,6 @@ async def on_message(message):
         print(f"Sent response: {answer}")
         chat_history += f"**You said:\n{answer}\n"
         answered_question_today = True
-        ##print(f"***Full Chat History***: \n{chat_history}")
         return
 
 client.run(bot_token)
