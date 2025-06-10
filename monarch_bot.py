@@ -221,9 +221,9 @@ async def on_message(message):
                 Your majesty, how do you respond?"""
             ).text.replace("\n\n", "\n")
 
-        await message.reply(answer.text)
-        print(f"Sent response: {answer.text}")
-        chat_history += f"**You said: \n{answer.text}\n"
+        await message.reply(answer)
+        print(f"Sent response: {answer}")
+        chat_history += f"**You said: \n{answer}\n"
         responses_today += 1
         ##print(f"***Full Chat History***: \n{chat_history}")
         return
