@@ -47,9 +47,51 @@ Finally, the main Monarch Bot agent reads the chosen fact, reads the question, a
 
 Question ---> Head Advisor chooses a sub advisor ---> Sub-advisor chooses one fact ---> Monarch considers the chosen fact and answers the question
 
+```mermaid
+graph TD
+    A[Receive Discord Message] --> B[Head Advisor]
+    B --> C{Advisor Selection}
+    
+    C -->|Family/Job related| I[Personal Advisor]
+    C -->|Entertainment/Culture| J[Media Advisor]
+    C -->|Geography/World| K[Travel Advisor]
+    C -->|Technology/Modern refs| L[Technology Advisor]
+    
+    I --> M[Select Relevant Fact]
+    J --> M
+    K --> M
+    L --> M
+    
+    M --> R[Monarch]
+
+    R --> S[Generate Response as King Maximilian VII]
+    S --> T[Send Discord Message]
+
+    subgraph MM[Memory]
+        U[Chat History]
+    end
+
+    S -.-> |Consider Reply Chain| U
+    
+    subgraph LLM[LLM]
+        V[Google Gemini 2.5 Flash]
+    end
+    
+    M -.-> V
+    C -.-> V
+    S -.-> V
+    
+    style B fill:#e1f5fe,color:#000000
+    style R fill:#f3e5f5,color:#000000
+    style V fill:#fff3e0,color:#000000
+    style MM fill:#bae1ff, color:#000000
+    style LLM fill:#ffb3ba, color:#000000
+    style U fill:#fff3e0,color:#000000
+```
+
 ## How to Use this Repository
 
-You can run this bot yourself by cloning this repo. Using .env.example as a template, create a .env file and supply a discord bot token and gemini API key.
+You can run this bot yourself by cloning this repo. Using .env.example as a template, create a .env file and supply a [discord bot token](https://discord.com/developers/applications) and [gemini API key](https://ai.google.dev/gemini-api/docs/api-key).
 
 > Note: The default Gemini free version gave me overload issues when I ran this bot on a single server. A paid account or a free trial for Google Cloud will resolve this issue.
 
