@@ -66,9 +66,8 @@ graph TD
 
     R --> S[Generate Response as King Maximilian VII]
     S --> Resp[Response]
-    Resp --> T
+    Resp --> T[Send Discord Message]
     Resp -.->|Save to History| U
-    S --> T[Send Discord Message]
     
     subgraph MM[Local Memory]
         U[Chat History]
