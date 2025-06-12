@@ -65,9 +65,12 @@ graph TD
     M --> R[Monarch]
 
     R --> S[Generate Response as King Maximilian VII]
+    S --> Resp[Response]
+    Resp --> T
+    Resp -.->|Save to History| U
     S --> T[Send Discord Message]
-
-    subgraph MM[Memory]
+    
+    subgraph MM[Local Memory]
         U[Chat History]
     end
 
@@ -91,7 +94,7 @@ graph TD
 
 ## How to Use this Repository
 
-You can run this bot yourself by cloning this repo. Using .env.example as a template, create a .env file and supply a [discord bot token](https://discord.com/developers/applications) and [gemini API key](https://ai.google.dev/gemini-api/docs/api-key).
+You can run this bot yourself by cloning this repo. Using .env.example as a template, create a .env file and supply a [discord bot token](https://discord.com/developers/applications) and [Gemini API key](https://ai.google.dev/gemini-api/docs/api-key).
 
 > Note: The default Gemini free version gave me overload issues when I ran this bot on a single server. A paid account or a free trial for Google Cloud will resolve this issue.
 
