@@ -23,13 +23,13 @@ Monarch Bot responds to two different types of questions:
 - *Question of the Day*: The first message of the day that starts with "QOTD:" (case and formatting insensitive)
 - *Mentions*: A direct mention, including replies, but not @everyone or @here
 
-Monarch Bot is better described as an Agentic system with four subagents:
+Monarch Bot is better described as an Agentic system with multiple subagents:
 
 - **Head Advisor** delegates the question to the sub advisor most likely to have relevant knowledge.
-- **Personal Advisor** knows details about the Monarch's family and job.
-- **Media Advisor** knows about the Monarch's opinions on plays, music, and games.
-- **Travel Advisor** knows about the world from the Monarch's 15th century perspective, including exotic countries and animals.
-- **Technology Advisor** knows about technological advancements and interprets any references to modern technologies.
+    - **Personal Advisor** knows details about the Monarch's family and job.
+    - **Media Advisor** knows about the Monarch's opinions on plays, music, and games.
+    - **Travel Advisor** knows about the world from the Monarch's 15th century perspective, including exotic countries and animals.
+    - **Technology Advisor** knows about technological advancements and interprets any references to modern technologies.
 
 Given simple descriptions of each advisor, the Head Advisor reads the question and indicates which advisor might have relevant information.
 
