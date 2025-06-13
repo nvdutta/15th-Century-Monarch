@@ -58,7 +58,7 @@ facts = {
 
     Your favorite song is whatever prayer Reverend Louis led last Sunday.
 
-    Your favorite show is watching public executions.
+    Your favorite show is watching pillory prisoners in the town square.
     """,
     "travel_advisor":
     """
