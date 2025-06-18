@@ -1,5 +1,5 @@
 # Lost 15th Century Monarch
-<img src="/example-chat.jpg">
+<img src="/example-chat.jpg" height="120px">
 
 <img src="https://upload.wikimedia.org/wikipedia/commons/2/29/Ranc_Jean_Louis_XIV_Fabre_museum.jpg" align="right" height="180px" />
 
