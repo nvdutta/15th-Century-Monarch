@@ -1,9 +1,15 @@
 import discord
 import os
+from datetime import datetime
+import pytz
+import random
+import logging
 from dotenv import load_dotenv
 from google import genai
 
 load_dotenv()
+
+max_responses_per_day = 4  # Set the maximum number of responses per day, not including QOTD
 
 bot_token = os.getenv("BOT_TOKEN")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
@@ -12,18 +18,32 @@ model = os.getenv("MODEL")
 intents = discord.Intents.default()
 intents.message_content = True  # Enable message content intent
 
+servers = {}  # Dictionary to store server-specific details
+
+trigger_words = ["king", "monarch", "royal", "crown", "throne", "government", "democracy","monarchy", "president", "dictator"]
+
 client = discord.Client(intents=intents)
 
 llm = genai.Client(api_key=gemini_api_key)
 
-chat_history = """"""
+def today() -> str:
+    """Returns today's date in YYYY-MM-DD format."""
+    return datetime.now(pytz.timezone("US/Eastern")).strftime("%Y-%m-%d")
 
-background = """
-                ****BACKGROUND****
-                You are King Maximilian VII, monarch of France in the current year of 1462. You are 35 years old.
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+# If the logs directory does not exist, create it
+if not os.path.exists("logs"):
+    os.makedirs("logs")
+
+logger = logging.getLogger('discord')
+logging.basicConfig(filename=f"logs\{today()}.log",level=logging.INFO)
+
+background = """****BACKGROUND****
+                You are King Maximilian VII, absolute monarch of France in the current year of 1462. You are 35 years old.
                 The peasants are starving because they are unintelligent.
                 1462 is the best year ever. Depression is a choice.
-                When you see modern technology referenced, you perceive it in its 15th century equivalent, ex car = carriage, movie = play
+                When you see modern technology referenced, you think it is unwieldy and overengineered compared to the technology of your time.
                 Your messages are short and to the point. You speak somewhat eloquently.
                 You never use the words 'duh', 'obviously', or 'clearly'."""
 
@@ -43,6 +63,8 @@ facts = {
     Your favorite color is blue, like the atlantic ocean.
 
     Your favorite animal is a horse, and you have a prized stallion named Thunder.
+
+    Your sworn enemy is the King of England's evil advisor, Freidrick, who you believe used witchcraft to send the plague to France.
 
     Your favorite food is blood pudding.
     """,
@@ -104,14 +126,10 @@ facts = {
     """
 }
 
-max_responses_per_day = 3  # Set the maximum number of responses per day, not including QOTD
 
-answered_question_today = False
-
-responses_today = 0
 
 ## Helper function uses the LLM to decide the most relevant advisor based on the message 
-def get_advisor(message: str) -> str:
+def decide_advisor(message: str) -> str:
     chosen_advisor = llm.models.generate_content(
             model=model,
             contents=f"""
@@ -147,7 +165,7 @@ def get_advisor(message: str) -> str:
     return chosen_advisor
 
 ## Helper function uses the LLM to decide the most relevant fact based on the message and the given advisor
-def get_advice(advisor: str, message: str) -> str:
+def decide_advice(advisor: str, message: str) -> str:
     advice = ""
     if advisor in facts:
         advice = llm.models.generate_content(
@@ -166,85 +184,51 @@ def get_advice(advisor: str, message: str) -> str:
 
 @client.event
 async def on_ready():
-    print(f"Logged in as {client.user} (ID: {client.user.id})")
+    logger.info(f"Logged in as {client.user} (ID: {client.user.id})")
 
 @client.event
 async def on_message(message):
-    global responses_today
-    global answered_question_today
-    global chat_history
+    global servers
 
     # Do not respond to messages from the bot itself
     if message.author == client.user:
         return
+
+    # Check if channel is "qotd"
+    if message.channel.name != "qotd":
+        return
     
+    server_id = message.guild.id
+
+    if server_id not in servers:
+        servers[server_id] = {
+            "last_answered_question_date": "",
+            "responses_sent": 0,
+            "chat_history": ""
+        }
+        logger.info(f"Initialized server {server_id}. '{message.guild.name}'")
+
     # Do not respond if above the max responses per day
-    if responses_today > max_responses_per_day:
+    if servers[server_id]["responses_sent"] > max_responses_per_day:
         return
-
-    # Specifically mentioned in message
-    if message.mentions and client.user in message.mentions and not message.mention_everyone:
-        print(f"Received mention: {message.content}")
-        # If this is the last response of the day, give a sign off
-        if responses_today == max_responses_per_day:
-            answer = llm.models.generate_content(
-                model=model,
-                contents=f"""
-                {background}
-                ****RESPONSE****
-                Offer a short, vague excuse for why you must leave for the rest of the day, and give a goodbye.
-                """
-            ).text.replace("\n\n", "\n")
-
-            await message.channel.send(answer)
-            print(f"Sent response: {answer}")
-            responses_today += 1
-            return
-
-        chat_history += f"**They said: \n{message.content}\n"
-        trimmed_message = message.content.lower().replace("*","")
-        chosen_advisor = get_advisor(trimmed_message)
-
-        advice = ""
-        advice = get_advice(chosen_advisor, trimmed_message)
-
-        answer = llm.models.generate_content(
-                model=model,
-                contents=f"""
-                {background}
-                Your {chosen_advisor.replace("_"," ")} thought this piece of information may be relevant:
-                {advice}
-
-                ****REPLY CHAIN****
-                {chat_history}
-                
-                Your majesty, how do you respond?"""
-            ).text.replace("\n\n", "\n")
-
-        await message.reply(answer)
-        print(f"Sent response: {answer}")
-        chat_history += f"**You said: \n{answer}\n"
-        responses_today += 1
-        ##print(f"***Full Chat History***: \n{chat_history}")
-        return
-
+    
+    trimmed_message = message.content.lower().replace("*","")
 
     #Question of the Day
-    if message.content.lower().replace("*","").startswith("qotd") and not answered_question_today:
-        print(f"Received message: {message.content}")
+    if ("qotd:" in trimmed_message or "question of the day:" in trimmed_message)and servers[server_id]["last_answered_question_date"] != today():
+
+        logger.info(f"Received message: {trimmed_message}")
         
-        chat_history += f"{message.content}\n"
+        servers[server_id]["chat_history"] += f"{trimmed_message}\n"
 
-        trimmed_message = message.content.lower().replace("*","")[5:]
-
-        chosen_advisor = get_advisor(trimmed_message)
-        print(f"Chosen advisor: {chosen_advisor}\n")
+        chosen_advisor = decide_advisor(trimmed_message)
+        logger.info(f"Chosen advisor: {chosen_advisor}\n")
 
         advice = ""
-        advice = get_advice(chosen_advisor, trimmed_message)
+        advice = decide_advice(chosen_advisor, trimmed_message)
 
-        print(f"Chosen fact: {advice}\n")
-        
+        logger.info(f"Chosen fact: {advice}\n")
+
         answer = llm.models.generate_content(
             model=model,
             contents=f"""
@@ -259,9 +243,61 @@ async def on_message(message):
         ).text.replace("\n\n", "\n")
         
         await message.channel.send(answer)
-        print(f"Sent response: {answer}")
-        chat_history += f"**You said:\n{answer}\n"
-        answered_question_today = True
+        logger.info(f"Sent response: {answer}")
+        servers[server_id]["chat_history"] = ""
+        servers[server_id]["chat_history"] += f"**You said:\n{answer}\n"
+        servers[server_id]["last_answered_question_date"] = today()
+        logging.basicConfig(filename=f"logs\{today()}.log",level=logging.INFO)
+        logger.info(f"Initialized new chat history for server {server_id} ({message.guild.name})")
+        logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}.")
+        return
+
+    # If the qotd has not been answered today, do not respond to any other messages
+    if servers[server_id]["last_answered_question_date"] != today():
+        return
+
+    # Specifically mentioned in message
+    if (message.mentions and client.user in message.mentions and not message.mention_everyone) or (any(word in message.content.lower() for word in trigger_words) or (len(message.content) > 30 and random.randint(1, 100) <= 2 * (max_responses_per_day - servers[server_id]["responses_sent"]))):
+        logger.info(f"Received message: {message.content}")
+        # If this is the last response of the day, give a sign off
+        if servers[server_id]["responses_sent"] == max_responses_per_day:
+            answer = llm.models.generate_content(
+                model=model,
+                contents=f"""
+                You are King Maximilian VII, absolute monarch of France.
+                Offer a short, vague excuse for why you must leave for the rest of the day, and give a goodbye.
+                """
+            ).text.replace("\n\n", "\n")
+            await message.channel.send(answer)
+            logger.info(f"Sent response: {answer}")
+            logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}. Day complete.")
+            servers[server_id]["responses_sent"] += 1
+            return
+        servers[server_id]["chat_history"] += f"**They said: \n{message.content}\n"
+        chosen_advisor = decide_advisor(trimmed_message)
+        logger.info(f"Chosen advisor: {chosen_advisor}\n")
+        advice = ""
+        advice = decide_advice(chosen_advisor, trimmed_message)
+        logger.info(f"Chosen fact: {advice}\n")
+        answer = llm.models.generate_content(
+                model=model,
+                contents=f"""
+                {background}
+
+                Your {chosen_advisor.replace("_"," ")} thought this piece of information may be relevant:
+                {advice}
+
+                ****REPLY CHAIN****
+                {servers[server_id]["chat_history"]}
+                
+                How do you respond? Respond in 50 words or fewer."""
+            ).text.replace("\n\n", "\n").replace("*","").strip()
+
+        await message.reply(answer)
+        logger.info(f"Sent response: {answer}")
+        servers[server_id]["chat_history"] += f"**You said: \n{answer}\n"
+        servers[server_id]["responses_sent"] += 1
+        logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}.")
         return
 
 client.run(bot_token)
