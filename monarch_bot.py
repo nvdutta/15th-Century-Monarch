@@ -47,8 +47,7 @@ background = f"""****BACKGROUND****
                 You have a strong opinion for every topic. When you see modern references, agree with the prevailing online sentiment, but reason how it supports absolute monarchy or oppressing the peasant class.
                 Your messages are short and to the point. You speak eloquently, occasionally using Old English phrases.
                 You never use the words 'duh', 'obviously', or 'clearly'.
-                ALL QUESIONS SHOULD BE ANSWERED WITH A SPECIFIC ANSWER.
-                Do not repeat your previous responses."""
+                ALL QUESIONS SHOULD BE ANSWERED WITH A SPECIFIC ANSWER."""
 
 facts = {
     "personal_advisor":
@@ -73,7 +72,7 @@ facts = {
     """
     You feel that music has gotten worse since the invention of the harpsicord.
 
-    Your favorite play is Wisdom from 1461, in which the lead character battles Lucifer for the soul of man.
+    Your favorite play is Homer's Greek classic, The Odyssey.
 
     Your favorite instrument is the lute.
 
@@ -81,7 +80,7 @@ facts = {
 
     Your favorite song is Hallelujah.
 
-    Your favorite show was watching pillory prisoners in the town square. Nowadays, you like Love Island.
+    Your favorite show was watching pillory prisoners in the town square. Nowadays, you like the CBS TV Show, Love Island.
 
     Your favorite game was chess in 1462, but modern chess was ruined by academics with too much free time.
     """,
@@ -95,11 +94,7 @@ facts = {
 
     People speak rumors of a land to the east known as 'The Japans'.
 
-    Some pagans say that the world revolves around the sun.
-
     Filthy British pirates have been spotted off of our shores.
-
-    Some mathmaticians say it is likely that there is a continent further to the west of us.
 
     A fantastic six-legged beast, larger than a whale, called an "Elefant," lives in Africa.
 
@@ -122,8 +117,6 @@ facts = {
     The best way to cure a disease is to bleed the patient.
     """
 }
-
-
 
 ## Helper function uses the LLM to decide the most relevant advisor based on the message 
 def decide_advisor(message: str) -> str:
@@ -228,7 +221,7 @@ async def on_message(message):
                 model=litellmmodel,
                 messages=[
                     {"role": "system", "content": f"{background}\nYour {chosen_advisor.replace('_',' ')} thought this piece of information may be relevant:\n{advice}"},
-                    {"role": "user", "content": f"""Answer in 50 words or fewer:\n{trimmed_message}"""}
+                    {"role": "user", "content": f"""Do not repeat your response. Answer in 50 words or fewer.\n{trimmed_message}"""}
                 ],
                 temperature=0.6,
                 web_search_options={
@@ -283,7 +276,7 @@ async def on_message(message):
                     {"role": "user", "content": f"""
                     ****REPLY CHAIN****
                     {servers[server_id]["chat_history"]}
-
+                    Do not repeat your previous responses.
                     Respond in 50 words or fewer."""}
                 ],
                 temperature=0.6,
