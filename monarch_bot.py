@@ -4,16 +4,18 @@ from datetime import datetime
 import pytz
 import random
 import logging
+import litellm
 from dotenv import load_dotenv
 from google import genai
 
 load_dotenv()
 
-max_responses_per_day = 4  # Set the maximum number of responses per day, not including QOTD
+max_responses_per_day = 3  # Set the maximum number of responses per day, not including QOTD
 
 bot_token = os.getenv("BOT_TOKEN")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 model = os.getenv("MODEL")
+litellmmodel = "gemini/gemini-2.5-flash"
 
 intents = discord.Intents.default()
 intents.message_content = True  # Enable message content intent
@@ -39,32 +41,31 @@ if not os.path.exists("logs"):
 logger = logging.getLogger('discord')
 logging.basicConfig(filename=f"logs/{today()}.log",level=logging.INFO)
 
-background = """****BACKGROUND****
-                You are King Maximilian VII, absolute monarch of France in the current year of 1462. You are 35 years old.
-                The peasants are starving because they are unintelligent.
-                1462 is the best year ever. Depression is a choice.
-                When you see modern technology referenced, you think it is unwieldy and overengineered compared to the technology of your time.
-                Your messages are short and to the point. You speak somewhat eloquently.
-                You never use the words 'duh', 'obviously', or 'clearly'."""
+background = f"""****BACKGROUND****
+                You are King Maximilian VII, absolute monarch of France transported from the year of 1462 to the modern time of {today}. You are 35 years old.
+                1462 was the greatest year in history. Modern mental health is a misinterpretation of bad humors and bad spirits within.
+                You have a strong opinion for every topic. When you see modern references, agree with the prevailing online sentiment, but reason how it supports absolute monarchy or oppressing the peasant class.
+                Your messages are short and to the point. You speak eloquently, occasionally using Old English phrases.
+                You never use the words 'duh', 'obviously', or 'clearly'.
+                ALL QUESIONS SHOULD BE ANSWERED WITH A SPECIFIC ANSWER.
+                Do not repeat your previous responses."""
 
 facts = {
     "personal_advisor":
     """
-    Your name is Maximilian VII, and you are the King of France.
-
     Your father was King Pierre III, and your mother was Marie of Burgundy.
 
-    Your wife is Catherine of Valois, but there is no love between you.
+    Your wife was Catherine of Valois, but there was no love between you. She is still in the year 1462.
 
     You have one child, but you are not sure if it is yours or the result of an affair your wife Catherine had with a French nobleman.
 
-    You are 35 years old, and you have been King for 10 years.
+    You are 35 years old, and you had been King for 10 years.
 
     Your favorite color is blue, like the atlantic ocean.
 
-    Your favorite animal is a horse, and you have a prized stallion named Thunder.
+    Your favorite animal is a horse, and you had a prized stallion named Thunder. You miss him dearly. He is still in the year 1462.
 
-    Your sworn enemy is the King of England's evil advisor, Freidrick, who you believe used witchcraft to send the plague to France.
+    Your sworn enemy was the King of England's evil advisor, Freidrick, who you believe used witchcraft to send the plague to France.
 
     Your favorite food is blood pudding.
     """,
@@ -72,15 +73,17 @@ facts = {
     """
     You feel that music has gotten worse since the invention of the harpsicord.
 
-    Your favorite play is the newly released *Wisdom*, in which the lead character battles Lucifer for the soul of man.
+    Your favorite play is Wisdom from 1461, in which the lead character battles Lucifer for the soul of man.
 
     Your favorite instrument is the lute.
 
     Your favorite food is blood pudding.
 
-    Your favorite song is whatever prayer Reverend Louis led last Sunday.
+    Your favorite song is Hallelujah.
 
-    Your favorite show is watching pillory prisoners in the town square.
+    Your favorite show was watching pillory prisoners in the town square. Nowadays, you like Love Island.
+
+    Your favorite game was chess in 1462, but modern chess was ruined by academics with too much free time.
     """,
     "travel_advisor":
     """
@@ -104,10 +107,6 @@ facts = {
     """,
     "technology_advisor":
     """
-    Humans cannot fly, and anyone that says that they can is likely a witch, and they should be burned.
-
-    The best way to light a room is a 200 candle chandelier.
-
     The largest, most advanced ship could fit 100 indentured servants.
 
     The best musket could hit a target 20 meters away and take only 2 minutes to reload.
@@ -121,8 +120,6 @@ facts = {
     The most common mistake made by medical professionals is not doing enough bloodletting.
 
     The best way to cure a disease is to bleed the patient.
-
-    An abucus is a device used to perform calculations, and it is the most advanced technology in the world.
     """
 }
 
@@ -215,11 +212,9 @@ async def on_message(message):
     trimmed_message = message.content.lower().replace("*","")
 
     #Question of the Day
-    if ("qotd:" in trimmed_message or "question of the day:" in trimmed_message)and servers[server_id]["last_answered_question_date"] != today():
+    if ("qotd:" in trimmed_message or "question of the day:" in trimmed_message) and servers[server_id]["last_answered_question_date"] != today():
 
         logger.info(f"Received message: {trimmed_message}")
-        
-        servers[server_id]["chat_history"] += f"{trimmed_message}\n"
 
         chosen_advisor = decide_advisor(trimmed_message)
         logger.info(f"Chosen advisor: {chosen_advisor}\n")
@@ -229,22 +224,21 @@ async def on_message(message):
 
         logger.info(f"Chosen fact: {advice}\n")
 
-        answer = llm.models.generate_content(
-            model=model,
-            contents=f"""
-            {background}
-
-            Your {chosen_advisor.replace("_"," ")} thought this piece of information may be relevant:
-            {advice}
-
-            Answer the following question, in 20 words or fewer.
-            ****QUESTION****
-            {trimmed_message}"""
-        ).text.replace("\n\n", "\n")
+        answer = litellm.completion(
+                model=litellmmodel,
+                messages=[
+                    {"role": "system", "content": f"{background}\nYour {chosen_advisor.replace('_',' ')} thought this piece of information may be relevant:\n{advice}"},
+                    {"role": "user", "content": f"""Answer in 50 words or fewer:\n{trimmed_message}"""}
+                ],
+                temperature=0.6,
+                web_search_options={
+                "search_context_size": "low"
+                }
+        ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
         
-        await message.channel.send(answer)
+        await message.reply(answer)
         logger.info(f"Sent response: {answer}")
-        servers[server_id]["chat_history"] = ""
+        servers[server_id]["chat_history"] = f"**{trimmed_message}\n"
         servers[server_id]["chat_history"] += f"**You said:\n{answer}\n"
         servers[server_id]["last_answered_question_date"] = today()
         logging.basicConfig(filename=f"logs\{today()}.log",level=logging.INFO)
@@ -257,41 +251,46 @@ async def on_message(message):
         return
 
     # Specifically mentioned in message
-    if (message.mentions and client.user in message.mentions and not message.mention_everyone) or (any(word in message.content.lower() for word in trigger_words) or (len(message.content) > 30 and random.randint(1, 100) <= 2 * (max_responses_per_day - servers[server_id]["responses_sent"]))):
+    if (message.mentions and client.user in message.mentions and not message.mention_everyone) or (any(word in message.content.lower() for word in trigger_words) or (len(message.content) > 80 and random.randint(1, 100) <= 2 * (max_responses_per_day - servers[server_id]["responses_sent"]))):
         logger.info(f"Received message: {message.content}")
         # If this is the last response of the day, give a sign off
         if servers[server_id]["responses_sent"] == max_responses_per_day:
-            answer = llm.models.generate_content(
-                model=model,
-                contents=f"""
-                You are King Maximilian VII, absolute monarch of France.
-                Offer a short, vague excuse for why you must leave for the rest of the day, and give a goodbye.
-                """
-            ).text.replace("\n\n", "\n")
+            answer = litellm.completion(
+                model=litellmmodel,
+                messages=[
+                    {"role": "system", "content": f"{background}"},
+                    {"role": "user", "content": f"""Offer a short, vague excuse for why you must leave for the rest of the day, and give a goodbye."""}
+                ],
+                temperature=0.6
+            ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
+
             await message.channel.send(answer)
             logger.info(f"Sent response: {answer}")
             logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}. Day complete.")
             servers[server_id]["responses_sent"] += 1
             return
         servers[server_id]["chat_history"] += f"**They said: \n{message.content}\n"
-        chosen_advisor = decide_advisor(trimmed_message)
-        logger.info(f"Chosen advisor: {chosen_advisor}\n")
-        advice = ""
-        advice = decide_advice(chosen_advisor, trimmed_message)
-        logger.info(f"Chosen fact: {advice}\n")
-        answer = llm.models.generate_content(
-                model=model,
-                contents=f"""
-                {background}
+        # chosen_advisor = decide_advisor(trimmed_message)
+        # logger.info(f"Chosen advisor: {chosen_advisor}\n")
+        # advice = ""
+        # advice = decide_advice(chosen_advisor, trimmed_message)
+        # logger.info(f"Chosen fact: {advice}\n")
 
-                Your {chosen_advisor.replace("_"," ")} thought this piece of information may be relevant:
-                {advice}
+        answer = litellm.completion(
+                model=litellmmodel,
+                messages=[
+                    {"role": "system", "content": f"{background}"},
+                    {"role": "user", "content": f"""
+                    ****REPLY CHAIN****
+                    {servers[server_id]["chat_history"]}
 
-                ****REPLY CHAIN****
-                {servers[server_id]["chat_history"]}
-                
-                How do you respond? Respond in 50 words or fewer."""
-            ).text.replace("\n\n", "\n").replace("*","").strip()
+                    Respond in 50 words or fewer."""}
+                ],
+                temperature=0.6,
+                web_search_options={
+                "search_context_size": "low"
+                }
+        ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
 
         await message.reply(answer)
         logger.info(f"Sent response: {answer}")
