@@ -37,7 +37,7 @@ if not os.path.exists("logs"):
     os.makedirs("logs")
 
 logger = logging.getLogger('discord')
-logging.basicConfig(filename=f"logs\{today()}.log",level=logging.INFO)
+logging.basicConfig(filename=f"logs/{today()}.log",level=logging.INFO)
 
 background = """****BACKGROUND****
                 You are King Maximilian VII, absolute monarch of France in the current year of 1462. You are 35 years old.
