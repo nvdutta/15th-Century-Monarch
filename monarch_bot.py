@@ -244,7 +244,7 @@ async def on_message(message):
         return
 
     # Specifically mentioned in message
-    if (message.mentions and client.user in message.mentions and not message.mention_everyone) or (any(word in message.content.lower() for word in trigger_words) or (len(message.content) > 80 and random.randint(1, 100) <= 2 * (max_responses_per_day - servers[server_id]["responses_sent"]))):
+    if (message.mentions and client.user in message.mentions and not message.mention_everyone) or (any(word in message.content.lower() for word in trigger_words)) or (len(message.content) > 80 and random.randint(1, 100) <= 2 * (max_responses_per_day - servers[server_id]["responses_sent"])):
         logger.info(f"Received message: {message.content}")
         # If this is the last response of the day, give a sign off
         if servers[server_id]["responses_sent"] == max_responses_per_day:
