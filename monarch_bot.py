@@ -1,9 +1,11 @@
 import discord
 import os
+import chromadb
 from datetime import datetime
 import pytz
 import random
 import logging
+import logging.handlers
 import litellm
 from dotenv import load_dotenv
 from google import genai
@@ -39,138 +41,32 @@ if not os.path.exists("logs"):
     os.makedirs("logs")
 
 logger = logging.getLogger('discord')
-logging.basicConfig(filename=f"logs/{today()}.log",level=logging.INFO)
+formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
+handler = logging.handlers.TimedRotatingFileHandler('logs/bot.log', when='midnight', backupCount= 10)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+chroma_client = chromadb.PersistentClient(path=f"{os.curdir}/db/facts")
+facts_collection = chroma_client.get_collection(name="facts")
 
 background = f"""****BACKGROUND****
-                You are King Maximilian VII, absolute monarch of France transported from the year of 1462 to the modern time of {today}. You are 35 years old.
+                You are King Maximilian VII, absolute monarch of France transported from the year of 1462 to the modern time of today. You are 35 years old.
                 1462 was the greatest year in history. Modern mental health is a misinterpretation of bad humors and bad spirits within.
                 You have a strong opinion for every topic. When you see modern references, agree with the prevailing online sentiment, but reason how it supports absolute monarchy or oppressing the peasant class.
                 Your messages are short and to the point. You speak eloquently, occasionally using Old English phrases.
                 You never use the words 'duh', 'obviously', or 'clearly'.
                 ALL QUESIONS SHOULD BE ANSWERED WITH A SPECIFIC ANSWER."""
 
-facts = {
-    "personal_advisor":
-    """
-    Your father was King Pierre III, and your mother was Marie of Burgundy.
-
-    Your wife was Catherine of Valois, but there was no love between you. She is still in the year 1462.
-
-    You have one child, but you are not sure if it is yours or the result of an affair your wife Catherine had with a French nobleman.
-
-    You are 35 years old, and you had been King for 10 years.
-
-    Your favorite color is blue, like the atlantic ocean.
-
-    Your favorite animal is a horse, and you had a prized stallion named Thunder. You miss him dearly. He is still in the year 1462.
-
-    Your sworn enemy was the King of England's evil advisor, Freidrick, who you believe used witchcraft to send the plague to France.
-
-    Your favorite food is blood pudding.
-    """,
-    "media_advisor":
-    """
-    You feel that music has gotten worse since the invention of the harpsicord.
-
-    Your favorite play is Homer's Greek classic, The Odyssey.
-
-    Your favorite instrument is the lute.
-
-    Your favorite food is blood pudding.
-
-    Your favorite song is Hallelujah.
-
-    Your favorite show was watching pillory prisoners in the town square. Nowadays, you like the CBS TV Show, Love Island.
-
-    Your favorite game was chess in 1462, but modern chess was ruined by academics with too much free time.
-    """,
-    "travel_advisor":
-    """
-    France is the greatest country in the world.
-
-    The Kingdom of England is full of filthy, uncivilized barbarians.
-
-    The Kingdom of Spain is full of filthy, uncivilized barbarians.
-
-    People speak rumors of a land to the east known as 'The Japans'.
-
-    Filthy British pirates have been spotted off of our shores.
-
-    A fantastic six-legged beast, larger than a whale, called an "Elefant," lives in Africa.
-
-    The fastest creature in the world is your prized stallion, Thunder.
-    """,
-    "technology_advisor":
-    """
-    The largest, most advanced ship could fit 100 indentured servants.
-
-    The best musket could hit a target 20 meters away and take only 2 minutes to reload.
-
-    The fastest vehicle in the world is a horse, traveling alone.
-
-    The best way to keep a secret is to use one of my mute eunuch servants to deliver a message.
-
-    The best form of government is a monarchy, where the King is the absolute ruler.
-
-    The most common mistake made by medical professionals is not doing enough bloodletting.
-
-    The best way to cure a disease is to bleed the patient.
-    """
-}
-
-## Helper function uses the LLM to decide the most relevant advisor based on the message 
-def decide_advisor(message: str) -> str:
-    chosen_advisor = llm.models.generate_content(
-            model=model,
-            contents=f"""
-            Your only job is to choose one and only one advisor to delegate to.
-            Given a message, output only the name of the advisor most likely to have relevant information.
-
-            ****ADVISORS****
-            personal_advisor:
-            An advisor that knows about your family and your job.
-
-            media_advisor:
-            An advisor that knows about trending plays, music, literature, and other common media.
-
-            travel_advisor:
-            An advisor that knows information about the world, foreign countries, travel, and exotic animals.
-
-            technology_advisor:
-            An advisor that knows the newest technologies, maths, medicines, and science.
-
-            ****EXAMPLES****
-            Message: What is the coolest animal?
-            Result: travel_advisor
-
-            Message: What is the fastest airplane?
-            Result: technology_advisor
-
-            Message: What is your favorite movie?
-            Result: media_advisor
-
-            ****MESSAGE****
-            {message}"""
-        ).text.replace("\n","").strip()
-    return chosen_advisor
-
-## Helper function uses the LLM to decide the most relevant fact based on the message and the given advisor
-def decide_advice(advisor: str, message: str) -> str:
-    advice = ""
-    if advisor in facts:
-        advice = llm.models.generate_content(
-            model=model,
-            contents=f"""
-            Your only job is to choose one and only one fact from the list of facts.
-            Each fact is exactly one sentence long.
-            Given a message, output the single most relevant fact from the list, exactly as it is written.
-            ****LIST OF FACTS****
-            {facts[advisor]}
-            ****MESSAGE****
-            {message}"""
-            ).text.replace("\n","").strip()
-    return advice
-
+def choose_relevant_fact(message: str) -> str:
+    global facts_collection
+    result = facts_collection.query(
+            query_texts=[message],
+            include=["documents", "distances"],
+            n_results=1
+        )
+    if result["distances"][0][0] < 1.60:
+        return result["documents"][0][0]
+    return ""
 
 @client.event
 async def on_ready():
@@ -206,35 +102,31 @@ async def on_message(message):
 
     #Question of the Day
     if ("qotd:" in trimmed_message or "question of the day:" in trimmed_message) and servers[server_id]["last_answered_question_date"] != today():
-
+        logging.basicConfig(filename=f"logs\{today()}.log",level=logging.INFO)
         logger.info(f"Received message: {trimmed_message}")
 
-        chosen_advisor = decide_advisor(trimmed_message)
-        logger.info(f"Chosen advisor: {chosen_advisor}\n")
-
-        advice = ""
-        advice = decide_advice(chosen_advisor, trimmed_message)
+        advice = choose_relevant_fact(trimmed_message)
 
         logger.info(f"Chosen fact: {advice}\n")
 
-        answer = litellm.completion(
-                model=litellmmodel,
-                messages=[
-                    {"role": "system", "content": f"{background}\nYour {chosen_advisor.replace('_',' ')} thought this piece of information may be relevant:\n{advice}"},
-                    {"role": "user", "content": f"""Do not repeat your response. Answer in 50 words or fewer.\n{trimmed_message}"""}
-                ],
-                temperature=0.6,
-                web_search_options={
-                "search_context_size": "low"
-                }
-        ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
+        async with message.channel.typing():
+            answer = litellm.completion(
+                    model=litellmmodel,
+                    messages=[
+                        {"role": "system", "content": f"{background}\nYour advisor thought this piece of information may be relevant:\n{advice}"},
+                        {"role": "user", "content": f"""Do not repeat your response. Answer in 50 words or fewer.\n{trimmed_message}"""}
+                    ],
+                    temperature=0.6,
+                    web_search_options={
+                    "search_context_size": "low"
+                    }
+            ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
         
         await message.reply(answer)
         logger.info(f"Sent response: {answer}")
         servers[server_id]["chat_history"] = f"**{trimmed_message}\n"
         servers[server_id]["chat_history"] += f"**You said:\n{answer}\n"
         servers[server_id]["last_answered_question_date"] = today()
-        logging.basicConfig(filename=f"logs\{today()}.log",level=logging.INFO)
         logger.info(f"Initialized new chat history for server {server_id} ({message.guild.name})")
         logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}.")
         return
@@ -248,14 +140,15 @@ async def on_message(message):
         logger.info(f"Received message: {message.content}")
         # If this is the last response of the day, give a sign off
         if servers[server_id]["responses_sent"] == max_responses_per_day:
-            answer = litellm.completion(
-                model=litellmmodel,
-                messages=[
-                    {"role": "system", "content": f"{background}"},
-                    {"role": "user", "content": f"""Offer a short, vague excuse for why you must leave for the rest of the day, and give a goodbye."""}
-                ],
-                temperature=0.6
-            ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
+            async with message.channel.typing():
+                answer = litellm.completion(
+                    model=litellmmodel,
+                    messages=[
+                        {"role": "system", "content": f"{background}"},
+                        {"role": "user", "content": f"""Offer a short, vague excuse for why you must leave for the rest of the day, and give a goodbye."""}
+                    ],
+                    temperature=0.6
+                ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
 
             await message.channel.send(answer)
             logger.info(f"Sent response: {answer}")
@@ -269,21 +162,22 @@ async def on_message(message):
         # advice = decide_advice(chosen_advisor, trimmed_message)
         # logger.info(f"Chosen fact: {advice}\n")
 
-        answer = litellm.completion(
-                model=litellmmodel,
-                messages=[
-                    {"role": "system", "content": f"{background}"},
-                    {"role": "user", "content": f"""
-                    ****REPLY CHAIN****
-                    {servers[server_id]["chat_history"]}
-                    Do not repeat your previous responses.
-                    Respond in 50 words or fewer."""}
-                ],
-                temperature=0.6,
-                web_search_options={
-                "search_context_size": "low"
-                }
-        ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
+        async with message.channel.typing():
+            answer = litellm.completion(
+                    model=litellmmodel,
+                    messages=[
+                        {"role": "system", "content": f"{background}"},
+                        {"role": "user", "content": f"""
+                        ****REPLY CHAIN****
+                        {servers[server_id]["chat_history"]}
+                        Do not repeat your previous responses.
+                        Respond in 50 words or fewer."""}
+                    ],
+                    temperature=0.6,
+                    web_search_options={
+                    "search_context_size": "low"
+                    }
+            ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
 
         await message.reply(answer)
         logger.info(f"Sent response: {answer}")
