@@ -8,7 +8,6 @@ import logging
 import logging.handlers
 import litellm
 from dotenv import load_dotenv
-from google import genai
 
 load_dotenv()
 
@@ -16,7 +15,6 @@ max_responses_per_day = 3  # Set the maximum number of responses per day, not in
 
 bot_token = os.getenv("BOT_TOKEN")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
-model = os.getenv("MODEL")
 litellmmodel = "gemini/gemini-2.5-flash"
 
 intents = discord.Intents.default()
@@ -27,8 +25,6 @@ servers = {}  # Dictionary to store server-specific details
 trigger_words = ["king", "monarch", "royal", "crown", "throne", "government", "democracy", "president", "dictator"]
 
 client = discord.Client(intents=intents)
-
-llm = genai.Client(api_key=gemini_api_key)
 
 def today() -> str:
     """Returns today's date in YYYY-MM-DD format."""
