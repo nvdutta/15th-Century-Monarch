@@ -24,7 +24,7 @@ intents.message_content = True  # Enable message content intent
 
 servers = {}  # Dictionary to store server-specific details
 
-trigger_words = ["king", "monarch", "royal", "crown", "throne", "government", "democracy","monarchy", "president", "dictator"]
+trigger_words = ["king", "monarch", "royal", "crown", "throne", "government", "democracy", "president", "dictator"]
 
 client = discord.Client(intents=intents)
 
@@ -43,6 +43,7 @@ if not os.path.exists("logs"):
 logger = logging.getLogger('discord')
 formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
 handler = logging.handlers.TimedRotatingFileHandler('logs/bot.log', when='midnight', backupCount= 10)
+handler.namer = lambda name: name + ".log"
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
@@ -58,7 +59,6 @@ background = f"""****BACKGROUND****
                 ALL QUESIONS SHOULD BE ANSWERED WITH A SPECIFIC ANSWER."""
 
 def choose_relevant_fact(message: str) -> str:
-    global facts_collection
     result = facts_collection.query(
             query_texts=[message],
             include=["documents", "distances"],
@@ -121,14 +121,13 @@ async def on_message(message):
                     "search_context_size": "low"
                     }
             ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
-        
-        await message.reply(answer)
+            await message.reply(answer)
         logger.info(f"Sent response: {answer}")
         servers[server_id]["chat_history"] = f"**{trimmed_message}\n"
         servers[server_id]["chat_history"] += f"**You said:\n{answer}\n"
         servers[server_id]["last_answered_question_date"] = today()
         logger.info(f"Initialized new chat history for server {server_id} ({message.guild.name})")
-        logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}.")
+        logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}.") 
         return
 
     # If the qotd has not been answered today, do not respond to any other messages
@@ -149,8 +148,7 @@ async def on_message(message):
                     ],
                     temperature=0.6
                 ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
-
-            await message.channel.send(answer)
+                await message.channel.send(answer)
             logger.info(f"Sent response: {answer}")
             logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}. Day complete.")
             servers[server_id]["responses_sent"] += 1
@@ -178,8 +176,7 @@ async def on_message(message):
                     "search_context_size": "low"
                     }
             ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
-
-        await message.reply(answer)
+            await message.reply(answer)
         logger.info(f"Sent response: {answer}")
         servers[server_id]["chat_history"] += f"**You said: \n{answer}\n"
         servers[server_id]["responses_sent"] += 1
