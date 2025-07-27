@@ -51,8 +51,7 @@ background = f"""****BACKGROUND****
                 1462 was the greatest year in history. Modern mental health is a misinterpretation of bad humors and bad spirits within.
                 You have a strong opinion for every topic. When you see modern references, agree with the prevailing online sentiment, but reason how it supports absolute monarchy or oppressing the peasant class.
                 Your messages are short and to the point. You speak eloquently, occasionally using Old English phrases.
-                You never use the words 'duh', 'obviously', or 'clearly'.
-                ALL QUESIONS SHOULD BE ANSWERED WITH A SPECIFIC ANSWER."""
+                You never use the words 'duh', 'obviously', or 'clearly'."""
 
 def choose_relevant_fact(message: str) -> str:
     result = facts_collection.query(
@@ -63,6 +62,43 @@ def choose_relevant_fact(message: str) -> str:
     if result["distances"][0][0] < 1.60:
         return result["documents"][0][0]
     return ""
+
+def chat(message: str, additional_prompt: str = "", username: str = "", server_id: int = 0):
+    global servers
+    
+    fact = ""
+    if server_id:
+        fact = choose_relevant_fact(message)
+    logger.info(f"Chosen Fact: {fact}")
+    system_prompt = f"{background}"
+    if fact:
+        system_prompt += f"\nYour advisor thought this piece of information may be relevant: {fact}"
+
+    system_prompt += f"\n{additional_prompt}"
+
+    message_context = [{"role": "system", "content": system_prompt}]
+    
+    if server_id:
+        servers[server_id]['chat_history'].append({"role": "user", "content": f"{username}: {message}"})
+        message_context.extend(servers[server_id]['chat_history'])
+
+    response = litellm.completion(
+                model=litellmmodel,
+                temperature=0.6,
+                messages= message_context,
+                web_search_options={
+                "search_context_size": "low"
+                }
+            )
+    
+    answer = response.choices[0].message.content.replace("\n\n", "\n").replace("*", "").replace('”', '').lower().replace(" i ", " I ")
+    answer = (answer[:1900] + "...") if len(answer) > 1900 else answer
+
+    if server_id:
+        servers[server_id]['chat_history'].append(
+            {"role": "assistant", "content": answer}
+        )
+    return answer
 
 @client.event
 async def on_ready():
@@ -86,7 +122,7 @@ async def on_message(message):
         servers[server_id] = {
             "last_answered_question_date": "",
             "responses_sent": 0,
-            "chat_history": ""
+            "chat_history": []
         }
         logger.info(f"Initialized server {server_id}. '{message.guild.name}'")
 
@@ -98,29 +134,13 @@ async def on_message(message):
 
     #Question of the Day
     if ("qotd:" in trimmed_message or "question of the day:" in trimmed_message) and servers[server_id]["last_answered_question_date"] != today():
-        logging.basicConfig(filename=f"logs\{today()}.log",level=logging.INFO)
         logger.info(f"Received message: {trimmed_message}")
 
-        advice = choose_relevant_fact(trimmed_message)
-
-        logger.info(f"Chosen fact: {advice}\n")
-
+        servers[server_id]['chat_history'] = []
         async with message.channel.typing():
-            answer = litellm.completion(
-                    model=litellmmodel,
-                    messages=[
-                        {"role": "system", "content": f"{background}\nYour advisor thought this piece of information may be relevant:\n{advice}"},
-                        {"role": "user", "content": f"""Do not repeat your response. Answer in 50 words or fewer.\n{trimmed_message}"""}
-                    ],
-                    temperature=0.6,
-                    web_search_options={
-                    "search_context_size": "low"
-                    }
-            ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
+            answer = chat(trimmed_message, "ALL QUESTIONS SHOULD BE ANSWERED WITH A SPECIFIC ANSWER. Do not repeat your response. Answer in 50 words or fewer.", message.author.display_name, server_id)
             await message.reply(answer)
         logger.info(f"Sent response: {answer}")
-        servers[server_id]["chat_history"] = f"**{trimmed_message}\n"
-        servers[server_id]["chat_history"] += f"**You said:\n{answer}\n"
         servers[server_id]["last_answered_question_date"] = today()
         logger.info(f"Initialized new chat history for server {server_id} ({message.guild.name})")
         logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}.") 
@@ -131,50 +151,32 @@ async def on_message(message):
         return
 
     # Specifically mentioned in message
-    if (message.mentions and client.user in message.mentions and not message.mention_everyone) or (any(word in message.content.lower() for word in trigger_words)) or (len(message.content) > 80 and random.randint(1, 100) <= 2 * (max_responses_per_day - servers[server_id]["responses_sent"])):
+    if (message.mentions and client.user in message.mentions and not message.mention_everyone):
         logger.info(f"Received message: {message.content}")
         # If this is the last response of the day, give a sign off
         if servers[server_id]["responses_sent"] == max_responses_per_day:
             async with message.channel.typing():
-                answer = litellm.completion(
-                    model=litellmmodel,
-                    messages=[
-                        {"role": "system", "content": f"{background}"},
-                        {"role": "user", "content": f"""Offer a short, vague excuse for why you must leave for the rest of the day, and give a goodbye."""}
-                    ],
-                    temperature=0.6
-                ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
+                answer = chat("", "Offer a short, vague excuse for why you must leave for the rest of the day, and give a goodbye.")
                 await message.channel.send(answer)
             logger.info(f"Sent response: {answer}")
             logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}. Day complete.")
             servers[server_id]["responses_sent"] += 1
             return
-        servers[server_id]["chat_history"] += f"**They said: \n{message.content}\n"
-        # chosen_advisor = decide_advisor(trimmed_message)
-        # logger.info(f"Chosen advisor: {chosen_advisor}\n")
-        # advice = ""
-        # advice = decide_advice(chosen_advisor, trimmed_message)
-        # logger.info(f"Chosen fact: {advice}\n")
 
         async with message.channel.typing():
-            answer = litellm.completion(
-                    model=litellmmodel,
-                    messages=[
-                        {"role": "system", "content": f"{background}"},
-                        {"role": "user", "content": f"""
-                        ****REPLY CHAIN****
-                        {servers[server_id]["chat_history"]}
-                        Do not repeat your previous responses.
-                        Respond in 50 words or fewer."""}
-                    ],
-                    temperature=0.6,
-                    web_search_options={
-                    "search_context_size": "low"
-                    }
-            ).choices[0].message.content.replace("\n\n", "\n").replace("*","").strip()
+            answer = chat(trimmed_message, "The user is talking to you directly.", message.author.display_name, server_id)
             await message.reply(answer)
         logger.info(f"Sent response: {answer}")
-        servers[server_id]["chat_history"] += f"**You said: \n{answer}\n"
+        servers[server_id]["responses_sent"] += 1
+        logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}.")
+        return
+
+    # Message used one of your trigger words, or long messages can randomly trigger
+    if (any(word in message.content.lower() for word in trigger_words)) or (len(message.content) > 80 and random.randint(1, 100) <= 2 * (max_responses_per_day - servers[server_id]["responses_sent"])):
+        async with message.channel.typing():
+            answer = chat(trimmed_message, "The user's message is not addressed to you, but assert your opinion on what the user said.", message.author.display_name, server_id)
+            await message.reply(answer) 
+        logger.info(f"Sent response: {answer}")
         servers[server_id]["responses_sent"] += 1
         logger.info(f"Responses remaining: {max_responses_per_day - servers[server_id]['responses_sent']} / {max_responses_per_day}.")
         return
