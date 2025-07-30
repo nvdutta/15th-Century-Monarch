@@ -1,6 +1,7 @@
 import discord
 import os
 import chromadb
+import time
 from datetime import datetime
 import pytz
 import random
@@ -12,6 +13,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 max_responses_per_day = 3  # Set the maximum number of responses per day, not including QOTD
+
+random_responses = False # Whether the bot responds outside of QOTD or direct mentions
 
 bot_token = os.getenv("BOT_TOKEN")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
@@ -64,6 +67,7 @@ def choose_relevant_fact(message: str) -> str:
     return ""
 
 def chat(message: str, additional_prompt: str = "", username: str = "", server_id: int = 0):
+    
     global servers
     
     fact = ""
@@ -137,6 +141,8 @@ async def on_message(message):
         logger.info(f"Received message: {trimmed_message}")
 
         servers[server_id]['chat_history'] = []
+
+        time.sleep(60 * random.randint(1,3)) # Wait 1-3 minutes before sending first QOTD response. Note this does not support multiple servers
         async with message.channel.typing():
             answer = chat(trimmed_message, "ALL QUESTIONS SHOULD BE ANSWERED WITH A SPECIFIC ANSWER. Do not repeat your response. Answer in 50 words or fewer.", message.author.display_name, server_id)
             await message.reply(answer)
@@ -172,7 +178,7 @@ async def on_message(message):
         return
 
     # Message used one of your trigger words, or long messages can randomly trigger
-    if (any(word in message.content.lower() for word in trigger_words)) or (len(message.content) > 80 and random.randint(1, 100) <= 2 * (max_responses_per_day - servers[server_id]["responses_sent"])):
+    if random_responses == True and ((any(word in message.content.lower() for word in trigger_words)) or (len(message.content) > 80 and random.randint(1, 100) <= 2 * (max_responses_per_day - servers[server_id]["responses_sent"]))):
         async with message.channel.typing():
             answer = chat(trimmed_message, "The user's message is not addressed to you, but assert your opinion on what the user said.", message.author.display_name, server_id)
             await message.reply(answer) 
