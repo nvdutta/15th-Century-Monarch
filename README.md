@@ -13,92 +13,131 @@ Uses discord.py for Discord API, sends prompts to Google Gemini 2.5 Flash.
 
 ## How It Works
 
-Lost 15th Century Monarch, or Monarch Bot, follows a tool-calling AI Agent pattern.
+Lost 15th Century Monarch, or Monarch Bot, uses a simple yet effective fact-retrieval system powered by ChromaDB vector search.
 
-Using this pattern might seem like overkill, but by separating the personal beliefs of the bot into different categories of "Advisors", the Monarch Bot produces interesting yet consistent responses to new questions.
+The bot maintains character consistency by storing 41 predefined character facts in a vector database. When responding to messages, it performs semantic search to find the most relevant fact and incorporates it into the response generation.
 
-Since the amount of context passed on any individual LLM call is also much smaller, the prompt has a much lower tendency of "leaking" directly into the output. 
+Monarch Bot responds to two different types of messages in channels named "qotd":
 
-Monarch Bot responds to two different types of questions:
+- *Question of the Day*: Messages containing "QOTD:" or "question of the day:" (case insensitive)
+  - Resets daily chat history and increments peasant unrest
+  - Limited to 50 words per response
+- *Direct Mentions*: Messages that mention the bot directly
+  - Only responds after QOTD has been answered for the day
+  - Limited to 3 additional responses per server per day
 
-- *Question of the Day*: The first message of the day that starts with "QOTD:" (case and formatting insensitive)
-- *Mentions*: A direct mention, including replies, but not @everyone or @here
+The bot implements a simple but effective retrieval-augmented generation (RAG) pattern:
 
-Monarch Bot is better described as an Agentic system with multiple subagents:
+1. **Message Received**: Bot checks if it's in a "qotd" channel and meets response criteria
+2. **Fact Retrieval**: ChromaDB performs semantic search across 41 character facts
+3. **Context Building**: If a relevant fact is found (similarity distance < 1.60), it's added to the system prompt
+4. **Response Generation**: Google Gemini generates a response as King Maximilian VII using the fact, character background, and chat history
 
-- **Head Advisor** delegates the question to the sub advisor most likely to have relevant knowledge.
-    - **Personal Advisor** knows details about the Monarch's family and job.
-    - **Media Advisor** knows about the Monarch's opinions on plays, music, and games.
-    - **Travel Advisor** knows about the world from the Monarch's 15th century perspective, including exotic countries and animals.
-    - **Technology Advisor** knows about technological advancements and interprets any references to modern technologies.
+Now introducing: **Peasant Unrest Percentage**: A narrative element that increases daily, affecting the tone and urgency of responses.
+An experiment into storing character states to keep a consistent narrative without bloating the context sent to the LLM.
+> Note: In the current implementation, the Monarch Bot has a set lifespan of 100 question-of-the-day uses per server.
 
-Given simple descriptions of each advisor, the Head Advisor reads the question and indicates which advisor might have relevant information.
-
-Each advisor has a list of "facts" that look something like this:
+The character facts cover:
 
 ```
+Your father was King Pierre III, and your mother was Marie of Burgundy.
+Your favorite food is blood pudding.
 The best form of government is a monarchy, where the King is the absolute ruler.
 The most common mistake made by medical professionals is not doing enough bloodletting.
 ...
 ```
 
-The chosen Advisor reads the question and indicates which fact from its list may be relevant to the question.
-
-Finally, the main Monarch Bot agent reads the chosen fact, reads the question, and creates a reply.
-
-Question ---> Head Advisor chooses a sub advisor ---> Sub-advisor chooses one fact ---> Monarch considers the chosen fact and answers the question
+Message → Semantic Search → Relevant Fact → LLM Response → Discord Message
 
 ```mermaid
 graph TD
-    A[Receive Discord Message] --> B[Head Advisor]
-    B --> C{Advisor Selection}
+    A[Receive Discord Message] --> B{Channel = 'qotd'?}
+    B -->|No| Z[Ignore Message]
+    B -->|Yes| C{QOTD or Mention?}
     
-    C -->|Family/Job related| I[Personal Advisor]
-    C -->|Entertainment/Culture| J[Media Advisor]
-    C -->|Geography/World| K[Travel Advisor]
-    C -->|Technology/Modern refs| L[Technology Advisor]
+    C -->|QOTD| D[Reset Chat History]
+    C -->|Mention| E{QOTD Answered Today?}
     
-    I --> M[Select Relevant Fact]
-    J --> M
-    K --> M
-    L --> M
+    E -->|No| Z
+    E -->|Yes| F{Under Daily Limit?}
+    F -->|No| Z
+    F -->|Yes| G[ChromaDB Semantic Search]
     
-    M --> R[Monarch]
-
-    R --> S[Generate Response as King Maximilian VII]
-    S --> Resp[Response]
-    Resp --> T[Send Discord Message]
-    Resp -.->|Save to History| U
+    D --> H[Increment Peasant Unrest]
+    H --> G
     
-    subgraph MM[Local Memory]
-        U[Chat History]
+    G --> I{Relevant Fact Found?}
+    I -->|Yes distance < 1.60| J[Add Fact to System Prompt]
+    I -->|No| K[Use Base System Prompt]
+    
+    J --> L[Google Gemini 2.5 Flash]
+    K --> L
+    
+    L --> M[Generate King Maximilian VII Response]
+    M --> N[Post-process Response]
+    N --> O[Send Discord Message]
+    O --> P[Update Chat History]
+    
+    subgraph ChromaDB[ChromaDB Vector Database]
+        Q[41 Character Facts]
     end
-
-    S -.-> |Consider Reply Chain| U
     
-    subgraph LLM[LLM]
-        V[Google Gemini 2.5 Flash]
+    subgraph Memory[Server Memory]
+        R[Chat History]
+        S[Response Count]
+        T[Peasant Unrest %]
+        U[Last QOTD Date]
     end
     
-    M -.-> V
-    C -.-> V
-    S -.-> V
+    G -.-> Q
+    P -.-> R
+    P -.-> S
+    H -.-> T
+    D -.-> U
     
-    style B fill:#e1f5fe,color:#000000
-    style R fill:#f3e5f5,color:#000000
-    style V fill:#fff3e0,color:#000000
-    style MM fill:#bae1ff, color:#000000
-    style LLM fill:#ffb3ba, color:#000000
-    style U fill:#fff3e0,color:#000000
+    style L fill:#fff3e0,color:#000000
+    style Q fill:#e8f5e8,color:#000000
+    style Memory fill:#bae1ff, color:#000000
 ```
 
 ## How to Use this Repository
 
-You can run this bot yourself by cloning this repo. Using .env.example as a template, create a .env file and supply a [discord bot token](https://discord.com/developers/applications) and [Gemini API key](https://ai.google.dev/gemini-api/docs/api-key).
+You can run this bot yourself by cloning this repo:
 
-> Note: The default Gemini free version gave me overload issues when I ran this bot on a single server. A paid account or a free trial for Google Cloud will resolve this issue.
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-This code can also be used as a framework for AI-integrated discord bots. The fact list and advisor names can be appended or swapped without issue.
+2. Create a `.env` file with:
+   ```
+   BOT_TOKEN=your_discord_bot_token
+   GEMINI_API_KEY=your_gemini_api_key
+   ```
+   Get tokens from [Discord Developer Portal](https://discord.com/developers/applications) and [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key).
+
+3. Initialize the facts database:
+   ```bash
+   python setup_chroma.py
+   ```
+
+4. Run the bot:
+   ```bash
+   python monarch_bot.py
+   ```
+
+> Note: The Gemini free tier may have rate limits. A paid account provides more reliable service for active servers.
+
+## Key Features
+
+- **Channel Restriction**: Only responds in channels named "qotd"
+- **Daily Limits**: 1 QOTD response + 3 mentions per server per day
+- **Peasant Unrest**: Narrative element that increases daily, affecting response tone
+- **Web Search**: Enabled in LLM calls for current events (increases API costs)
+- **Logging**: Comprehensive logging with daily rotation in `logs/` directory
+- **Character Consistency**: Vector search ensures relevant facts inform responses
+
+This codebase provides a solid foundation for character-based Discord bots using RAG (Retrieval-Augmented Generation). The fact database and character prompts can be easily modified for different personas.
 
 
 
