@@ -72,8 +72,6 @@ The public unrest is building, representated by the peasant unrest percentage.
 
 The current peasant unrest percentage is {peasant_unrest_percentage}%.
 
-Consider the peasant unrest percentage when writing dialogue, but slowly build the peasants' unrest into the narrative.
-Do not specifically mention the peasant unrest percentage in your dialogue.
 The peasant unrest percentage increases every day. Create a slow build. Any attempts the king makes to quell the unrest will fail.
 
 For every response, always consider:
