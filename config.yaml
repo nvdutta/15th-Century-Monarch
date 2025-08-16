@@ -1,0 +1,30 @@
+# Monarch Bot Configuration
+
+bot:
+  max_responses_per_day: 3
+  random_responses: false
+  auto_learn_facts: true
+  channel_name: "qotd"
+
+database:
+  path: "./db/facts"
+  collection_name: "facts"
+  relevance_threshold: 1.60
+
+llm:
+  model: "gemini/gemini-2.5-flash"
+  temperature: 0.6
+  max_response_length: 1900
+  web_search:
+    enabled: true
+    context_size: "low"
+
+triggers:
+  words: ["king", "monarch", "royal", "crown", "throne", "government", "democracy", "president", "dictator"]
+
+logging:
+  level: "INFO"
+  directory: "logs"
+  file_name: "bot.log"
+  rotation: "midnight"
+  backup_count: 10
