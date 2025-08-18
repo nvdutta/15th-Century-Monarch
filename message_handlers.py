@@ -26,6 +26,7 @@ async def handle_message(message, client, config, facts_collection, logger):
     # Check if bot can respond (daily limits, peasant unrest)
     if not can_respond(server_id, config['bot']['max_responses_per_day']):
         if server_state['peasant_unrest_percentage'] >= 101:
+            server_state['responses_sent'] = config['bot']['max_responses_per_day'] + 1
             logger.info(f"Peasant unrest percentage is above 100% for server {server_id}. The king is dead.")
         return
     
